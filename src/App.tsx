@@ -20,8 +20,18 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [appError, setAppError] = useState<string | null>(null);
 
   const isAdmin = user?.email === 'slgdj1228@gmail.com';
+
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      console.error("Global error caught:", event.error);
+      setAppError(event.error?.message || "알 수 없는 오류가 발생했습니다.");
+    };
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -49,21 +59,92 @@ export default function App() {
   }, [isAuthReady]);
 
   const handleLogin = async () => {
+    console.log("Login process started");
     setLoginError(null);
     setIsLoggingIn(true);
-    const provider = new GoogleAuthProvider();
+    
     try {
-      await signInWithPopup(auth, provider);
+      if (!auth) {
+        console.error("Auth object is null");
+        throw new Error("인증 시스템을 초기화할 수 없습니다. 페이지를 새로고침해 주세요.");
+      }
+      
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({
+        prompt: 'select_account'
+      });
+      
+      console.log("Calling signInWithPopup...");
+      const result = await signInWithPopup(auth, provider);
+      console.log("Login successful for:", result.user.email);
     } catch (error: any) {
-      console.error("Login failed", error);
-      setLoginError(error.message || "로그인에 실패했습니다.");
-      setTimeout(() => setLoginError(null), 5000);
+      console.error("Login Error Details:", {
+        code: error.code,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      let message = "로그인 중 오류가 발생했습니다.";
+      
+      if (error.code === 'auth/popup-blocked') {
+        message = "로그인 팝업창이 차단되었습니다. 브라우저 주소창 옆의 팝업 차단 해제를 클릭해 주세요.";
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        message = "로그인 요청이 취소되었습니다.";
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        message = "로그인 창이 닫혔습니다. 다시 시도해 주세요.";
+      } else if (error.code === 'auth/network-request-failed') {
+        message = "네트워크 연결이 불안정합니다. 인터넷 연결을 확인해 주세요.";
+      } else if (error.message) {
+        message = `로그인 실패: ${error.message}`;
+      }
+      
+      setLoginError(message);
+      
+      // If popup fails, suggest redirect
+      if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+        console.log("Suggesting redirect login");
+      }
+      
+      setTimeout(() => setLoginError(null), 10000);
+    } finally {
+      setIsLoggingIn(false);
+      console.log("Login process finished");
+    }
+  };
+
+  const handleLoginRedirect = async () => {
+    console.log("Login redirect started");
+    setLoginError(null);
+    setIsLoggingIn(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const { signInWithRedirect } = await import('firebase/auth');
+      await signInWithRedirect(auth, provider);
+    } catch (error: any) {
+      console.error("Redirect login failed:", error);
+      setLoginError("리다이렉트 로그인에 실패했습니다.");
     } finally {
       setIsLoggingIn(false);
     }
   };
 
   const handleLogout = () => signOut(auth);
+
+  if (appError) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex flex-col items-center justify-center p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-red-600 mb-4" />
+        <h1 className="text-xl font-bold mb-2">오류가 발생했습니다</h1>
+        <p className="text-stone-500 text-sm mb-6">{appError}</p>
+        <button 
+          onClick={() => window.location.reload()}
+          className="bg-emerald-600 text-white px-6 py-2 rounded-full font-bold"
+        >
+          새로고침
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -132,9 +213,19 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-md mx-auto px-4 pt-6">
         {loginError && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm animate-in fade-in slide-in-from-top-2">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <p>{loginError}</p>
+          <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-2xl space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="flex items-center gap-3 text-red-600 text-sm">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p>{loginError}</p>
+            </div>
+            {loginError.includes("팝업") && (
+              <button 
+                onClick={handleLoginRedirect}
+                className="w-full py-2 bg-white border border-red-200 text-red-600 rounded-xl text-xs font-bold hover:bg-red-50 transition-colors"
+              >
+                다른 방법(리다이렉트)으로 로그인 시도
+              </button>
+            )}
           </div>
         )}
         {renderView()}

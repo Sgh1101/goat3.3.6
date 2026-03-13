@@ -16,6 +16,8 @@ export default function HomeView({ user }: { user: User | null }) {
       if (doc.exists()) {
         setSettings(doc.data() as GlobalSettings);
       }
+    }, (error) => {
+      console.error("Settings snapshot error:", error);
     });
 
     const q = query(collection(db, 'notices'), orderBy('createdAt', 'desc'), limit(1));
@@ -23,6 +25,8 @@ export default function HomeView({ user }: { user: User | null }) {
       if (!snap.empty) {
         setLatestNotice({ id: snap.docs[0].id, ...snap.docs[0].data() } as Notice);
       }
+    }, (error) => {
+      console.error("Notice snapshot error:", error);
     });
 
     return () => {
