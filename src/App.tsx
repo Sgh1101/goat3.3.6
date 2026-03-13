@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
 import { doc, onSnapshot, getDocFromServer } from 'firebase/firestore';
-import { Home, Bell, Calendar, MessageSquare, ShieldCheck, LogIn, LogOut, Loader2, BookOpen } from 'lucide-react';
+import { Home, Bell, Calendar, MessageSquare, ShieldCheck, LogIn, LogOut, Loader2, BookOpen, AlertCircle } from 'lucide-react';
 import { cn } from './lib/utils';
 import HomeView from './components/HomeView';
 import NoticeView from './components/NoticeView';
@@ -18,6 +18,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentView, setCurrentView] = useState<View>('home');
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const isAdmin = user?.email === 'slgdj1228@gmail.com';
 
@@ -47,11 +49,17 @@ export default function App() {
   }, [isAuthReady]);
 
   const handleLogin = async () => {
+    setLoginError(null);
+    setIsLoggingIn(true);
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      setLoginError(error.message || "로그인에 실패했습니다.");
+      setTimeout(() => setLoginError(null), 5000);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -108,9 +116,14 @@ export default function App() {
         ) : (
           <button 
             onClick={handleLogin}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-emerald-700 transition-all shadow-sm active:scale-95"
+            disabled={isLoggingIn}
+            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-full text-sm font-semibold hover:bg-emerald-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
           >
-            <LogIn className="w-4 h-4" />
+            {isLoggingIn ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LogIn className="w-4 h-4" />
+            )}
             로그인
           </button>
         )}
@@ -118,6 +131,12 @@ export default function App() {
 
       {/* Main Content */}
       <main className="max-w-md mx-auto px-4 pt-6">
+        {loginError && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-sm animate-in fade-in slide-in-from-top-2">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            <p>{loginError}</p>
+          </div>
+        )}
         {renderView()}
       </main>
 
